@@ -39,3 +39,8 @@ def iter_valid_fields(meta):
             # skip excluded fields
             if field_name not in meta_exclude:
                 yield (field_name, field)
+
+    # walk through meta dfields
+    if meta.document._dynamic and hasattr(meta.document, '_dfields'):
+        for field_name, field in meta.document._dfields.iteritems():
+            yield (field_name, field)

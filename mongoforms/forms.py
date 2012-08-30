@@ -78,12 +78,21 @@ class MongoForm(forms.BaseForm):
             # walk through the document fields
             for field_name, field in iter_valid_fields(self._meta):
                 # add field data if needed
+                if not hasattr(instance, field_name):
+                    continue
                 field_data = getattr(instance, field_name)
-                if isinstance(self._meta.document._fields[field_name], ReferenceField):
-                    # field data could be None for not populated refs
-                    field_data = field_data and str(field_data.id)
+                if not self._meta.document._dynamic:
+                    fields = self._meta.document._fields
+                # add dfields if document is dynamic
+                elif hasattr(self._meta.document, '_dfields'):
+                    fields = self._meta.document._dfields
+                else:
+                    continue
+                if field_name in fields:
+                    _field = fields[field_name]
+                    if isinstance(_field, ReferenceField):
+                        field_data = field_data and str(field_data.id)
                 object_data[field_name] = field_data
-
         # additional initial data available?
         if initial is not None:
             object_data.update(initial)
