@@ -157,7 +157,6 @@ class MongoFormFieldGenerator(object):
             label=label)
 
     def generate_listfield(self, field_name, field, label):
-        # import pdb; pdb.set_trace()
         if field.field.choices:
             defaults = {
                 'choices': tuple(field.field.choices),
