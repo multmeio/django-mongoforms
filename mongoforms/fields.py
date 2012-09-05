@@ -5,6 +5,34 @@ from bson.objectid import ObjectId
 from mongoengine import StringField
 
 
+
+
+class ListField(forms.Field):
+    """
+    List field for mongo forms.
+    Uses MultiValueField from django.forms module. 
+    """
+    field_name_separator = '__'
+    
+    def __init__(self, field, field_name_base, list_size=2, *args, **kwargs):
+        forms.Field.__init__(self, *args, **kwargs)
+        self.fields = []
+
+        field_generator = MongoFormFieldGenerator()
+
+        for field_num in range(list_size):
+            field_name = '%s%s%s' % (field_name_base, 
+                                    self.field_name_separator, field_num)
+            self.fields.append(field_generator.generate(field_name, field))
+
+
+class EmbeddedDocumentField(forms.Field):
+    def __init__(self, field, field_name, *args, **kwargs):
+        from forms import MongoForm
+        super(EmbeddedDocumentField, self).__init__(*args, **kwargs)
+        meta = type('Meta', (), {'document': field.document_type_obj})
+        self.form = type('%sForm' % field_name, (MongoForm,), {'Meta': meta})
+
 class ReferenceField(forms.ChoiceField):
     """
     Reference field for mongo forms. Inspired by `django.forms.models.ModelChoiceField`.
@@ -156,31 +184,19 @@ class MongoFormFieldGenerator(object):
             field.document_type.objects,
             label=label)
 
+    #  Custom
     def generate_listfield(self, field_name, field, label):
-        if field.field.choices:
-            defaults = {
-                'choices': tuple(field.field.choices),
-                'required': field.required,
-                'label': label,
-                'widget': forms.CheckboxSelectMultiple
-            }
-            return forms.MultipleChoiceField(**defaults)
-
-        if isinstance(field.field, ReferenceField):
-            defaults = {
-                'label': label,
-                'required': field.required
-            }
-
-            f = DocumentMultipleChoiceField(field.field.document_type.objects, **defaults)
-            return f
-
-        if isinstance(field.field, StringField):
-            defaults = {
-                'required': field.required,
-                'label': label,
-                'widget': forms.Textarea
-            }
-            return forms.CharField(**defaults)
-        raise NotImplementedError('A ListField of %s is not supported by MongoForm' % \
-            field.field.__class__.__name__)
+        return ListField(
+            label=label,
+            field=field.field,
+            field_name_base=field_name,
+            required=field.required,
+            initial=field.default)
+    
+    def generate_embeddeddocumentfield(self, field_name, field, label):
+        return EmbeddedDocumentField(
+            label=label,
+            field=field,
+            field_name=field_name,
+            required=field.required,
+            initial=field.default)
