@@ -33,12 +33,20 @@ class MongoFormMetaClass(type):
             formfield_generator = getattr(attrs['Meta'], 'formfield_generator', \
                 MongoFormFieldGenerator)()
 
+
+
             # walk through the document fields
             for field_name, field in iter_valid_fields(attrs['Meta']):
                 # add field and override clean method to respect mongoengine-validator
-                doc_fields[field_name] = formfield_generator.generate(field_name, field)
-                doc_fields[field_name].clean = mongoengine_validate_wrapper(
-                    doc_fields[field_name].clean, field._validate)
+                _field = formfield_generator.generate(field_name, field)
+                if isinstance(_field, dict):
+                    for f in _field.itervalues():
+                        fname = f.label.lower()
+                        doc_fields[fname] = f
+                else:
+                    doc_fields[field_name] = _field
+                    doc_fields[field_name].clean = mongoengine_validate_wrapper(
+                        doc_fields[field_name].clean, field._validate)
 
             # write the new document fields to base_fields
             doc_fields.update(attrs['base_fields'])
@@ -112,3 +120,7 @@ class MongoForm(forms.BaseForm):
             self.instance.save()
 
         return self.instance
+
+
+
+
