@@ -5,9 +5,6 @@ from bson.objectid import ObjectId
 from mongoengine import StringField
 from mongoengine.fields import EmbeddedDocumentField
 
-
-
-
 class ListField(forms.Field):
     """
     List field for mongo forms.
@@ -25,15 +22,6 @@ class ListField(forms.Field):
             field_name = '%s%s%s' % (field_name_base, 
                                     self.field_name_separator, field_num)
             self.fields.append(field_generator.generate(field_name, field))
-
-
-# class EmbeddedDocumentField(forms.Field):
-#     def __init__(self, field, field_name, *args, **kwargs):
-#         from forms import MongoForm
-#         super(EmbeddedDocumentField, self).__init__(*args, **kwargs)
-#         meta = type('Meta', (), {'document': field.document_type_obj})
-#         self.form = type('%sForm' % field_name, (MongoForm,), {'Meta': meta})
-
 
 class ReferenceField(forms.ChoiceField):
     """
@@ -187,15 +175,7 @@ class MongoFormFieldGenerator(object):
             label=label)
 
     #  Custom
-    def generate_embeddeddocumentfield(self, field_name, field, label):
-        fields = {}
-        for f in field.document_type._fields.itervalues():
-            fields[f.name] = self.generate(f.name, f)
-        return fields
-
     def generate_listfield(self, field_name, field, label):
-        if hasattr(field, 'field') and isinstance(field.field, EmbeddedDocumentField):
-            return self.generate_embeddeddocumentfield(field_name, field.field, label)
         return ListField(
             label=label,
             field=field.field,
