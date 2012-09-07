@@ -2,6 +2,7 @@ from django import forms
 from django.utils.encoding import smart_unicode
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
+from mongoengine import StringField
 
 
 class ReferenceField(forms.ChoiceField):
@@ -154,3 +155,32 @@ class MongoFormFieldGenerator(object):
         return ReferenceField(
             field.document_type.objects,
             label=label)
+
+    def generate_listfield(self, field_name, field, label):
+        if field.field.choices:
+            defaults = {
+                'choices': tuple(field.field.choices),
+                'required': field.required,
+                'label': label,
+                'widget': forms.CheckboxSelectMultiple
+            }
+            return forms.MultipleChoiceField(**defaults)
+
+        if isinstance(field.field, ReferenceField):
+            defaults = {
+                'label': label,
+                'required': field.required
+            }
+
+            f = DocumentMultipleChoiceField(field.field.document_type.objects, **defaults)
+            return f
+
+        if isinstance(field.field, StringField):
+            defaults = {
+                'required': field.required,
+                'label': label,
+                'widget': forms.Textarea
+            }
+            return forms.CharField(**defaults)
+        raise NotImplementedError('A ListField of %s is not supported by MongoForm' % \
+            field.field.__class__.__name__)
