@@ -85,7 +85,7 @@ class MongoForm(forms.BaseForm):
                     fields = self._meta.document._fields
                 # add dfields if document is dynamic
                 elif hasattr(self._meta.document, '_dfields'):
-                    fields = self._meta.document._dfields()
+                    fields = self._meta.document._dfields
                 else:
                     continue
                 if field_name in fields:
