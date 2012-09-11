@@ -42,5 +42,5 @@ def iter_valid_fields(meta):
 
     # walk through meta dfields
     if meta.document._dynamic and hasattr(meta.document, '_dfields'):
-        for field_name, field in meta.document._dfields.iteritems():
+        for field_name, field in meta.document._dfields().iteritems():
             yield (field_name, field)
