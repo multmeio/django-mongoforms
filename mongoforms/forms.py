@@ -1,5 +1,6 @@
 import types
 from django import forms
+from django.core.validators import EMPTY_VALUES
 from django.utils.datastructures import SortedDict
 from mongoengine.base import BaseDocument
 from fields import MongoFormFieldGenerator
@@ -114,6 +115,64 @@ class MongoForm(forms.BaseForm):
         super(MongoForm, self).__init__(data, files, auto_id, prefix,
             object_data, error_class, label_suffix, empty_permitted)
 
+    def _get_validation_exclusions(self):
+        """
+        For backwards-compatibility, several types of fields need to be
+        excluded from model validation. See the following tickets for
+        details: #12507, #12521, #12553
+        """
+        exclude = []
+        # Build up a list of fields that should be excluded from model field
+        # validation and unique checks.
+        for f in self.instance._fields.itervalues():
+            field = f.name
+            # Exclude fields that aren't on the form. The developer may be
+            # adding these values to the model after form validation.
+            if field not in self.fields:
+                exclude.append(f.name)
+            elif field in self._errors.keys():
+                exclude.append(f.name)
+
+            # Exclude empty fields that are not required by the form, if the
+            # underlying model field is required. This keeps the model field
+            # from raising a required error. Note: don't exclude the field from
+            # validaton if the model field allows blanks. If it does, the blank
+            # value may be included in a unique check, so cannot be excluded
+            # from validation.
+            else:
+                field_value = self.cleaned_data.get(field, None)
+                if not f.required and field_value in EMPTY_VALUES:
+                    exclude.append(f.name)
+        return exclude
+
+    def validate_unique(self):
+        """
+        Validates unique constrains on the document.
+        unique_with is not checked at the moment.
+        """
+        errors = []
+        exclude = self._get_validation_exclusions()
+        for f in self.instance._fields.itervalues():
+            if f.unique and f.name not in exclude:
+                filter_kwargs = {
+                    f.name: getattr(self.instance, f.name)
+                }
+                qs = self.instance.__class__.objects().filter(**filter_kwargs)
+                # Exclude the current object from the query if we are editing an
+                # instance (as opposed to creating a new one)
+                if self.instance.pk is not None:
+                    qs = qs.filter(pk__ne=self.instance.pk)
+                if len(qs) > 0:
+                    message = _(u"%(model_name)s with this %(field_label)s already exists.") %  {
+                                'model_name': unicode(capfirst(self.instance._meta.verbose_name)),
+                                'field_label': unicode(pretty_name(f.name))
+                    }
+                    err_dict = {f.name: [message]}
+                    self._update_errors(err_dict)
+                    errors.append(err_dict)
+        
+        return errors
+
     def save(self, commit=True):
         """save the instance or create a new one.."""
 
@@ -156,7 +215,6 @@ def documentform_factory(document, form=MongoForm, fields=None, exclude=None,
         'formfield_callback': formfield_callback
     }
 
-    # import ipdb;ipdb.set_trace()
     return MongoFormMetaClass(class_name, (form,), form_class_attrs)
 
 
@@ -184,17 +242,20 @@ class BaseDocumentFormSet(BaseFormSet):
             pass 
         return initial
 
-    def initial_form_count(self):
-        """Returns the number of forms that are required in this FormSet."""
-        if not (self.data or self.files):
-            return len(self.get_queryset())
-        return super(BaseDocumentFormSet, self).initial_form_count()
+    # NOTE: Temporarily commented.
+    # TypeError: "object of type 'NoneType' has no len()
+
+    # def initial_form_count(self):
+    #     """Returns the number of forms that are required in this FormSet."""
+    #     if not (self.data or self.files):
+    #         return len(self.get_queryset())
+    #     return super(BaseDocumentFormSet, self).initial_form_count()
 
     def get_queryset(self):
         return self._queryset
 
-    def save_object(self, form):
-        obj = form.save(commit=False)
+    def save_object(self, form, commit=False):
+        obj = form.save(commit=commit)
         return obj
 
     def save(self, commit=True):
@@ -206,15 +267,7 @@ class BaseDocumentFormSet(BaseFormSet):
         for form in self.forms:
             if not form.has_changed() and not form in self.initial_forms:
                 continue
-            obj = self.save_object(form)
-            if form.cleaned_data["DELETE"]:
-                try:
-                    obj.delete()
-                except AttributeError:
-                    # if it has no delete method it is an 
-                    # embedded object. We just don't add to the list
-                    # and it's gone. Cook huh?
-                    continue
+            obj = self.save_object(form, commit)
             saved.append(obj)
         return saved
 
@@ -225,11 +278,12 @@ class BaseDocumentFormSet(BaseFormSet):
         errors = []
         for form in self.forms:
             if not hasattr(form, 'cleaned_data'):
-                continue
+                continue    
             errors += form.validate_unique()
             
         if errors:
             raise ValidationError(errors)
+
     def get_date_error_message(self, date_check):
         return ugettext("Please correct the duplicate data for %(field_name)s "
             "which must be unique for the %(lookup)s in %(date_field)s.") % {
@@ -248,8 +302,6 @@ def documentformset_factory(document, form=MongoForm, formfield_callback=None,
     """
     Returns a FormSet class for the given Django model class.
     """
-    import ipdb;ipdb.set_trace()
-
     form = documentform_factory(document, form=form, fields=fields, exclude=exclude,
                              formfield_callback=formfield_callback)
     FormSet = formset_factory(form, formset, extra=extra, max_num=max_num,
