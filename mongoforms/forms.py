@@ -18,6 +18,7 @@ class MongoFormMetaClass(type):
     """Metaclass to create a new MongoForm."""
 
     def __new__(cls, name, bases, attrs):
+
         # get all valid existing Fields and sort them
         fields = [(field_name, attrs.pop(field_name)) for field_name, obj in \
             attrs.items() if isinstance(obj, forms.Field)]
@@ -40,6 +41,8 @@ class MongoFormMetaClass(type):
                 MongoFormFieldGenerator)()
 
 
+            # import pdb;pdb.set_trace()
+            # if cls.__name__ == 'Channels':
 
             # walk through the document fields
             for field_name, field in iter_valid_fields(attrs['Meta']):
@@ -189,6 +192,7 @@ class MongoForm(forms.BaseForm):
 def documentform_factory(document, form=MongoForm, fields=None, exclude=None,
                        formfield_callback=None):
     # Build up a list of attributes that the Meta object will have.
+
     attrs = {'document': document, 'model': document}
     if fields is not None:
         attrs['fields'] = fields
@@ -228,6 +232,7 @@ class BaseDocumentFormSet(BaseFormSet):
         self.queryset = queryset
         self._queryset = self.queryset
         self.initial = self.construct_initial()
+        prefix = self.document.__name__.lower()
         defaults = {'data': data, 'files': files, 'auto_id': auto_id, 
                     'prefix': prefix, 'initial': self.initial}
         defaults.update(kwargs)
@@ -296,7 +301,7 @@ class BaseDocumentFormSet(BaseFormSet):
         return ugettext("Please correct the duplicate values below.")
 
 def documentformset_factory(document, form=MongoForm, formfield_callback=None,
-                         formset=BaseDocumentFormSet,
+                         formset=BaseDocumentFormSet, prefix=None,
                          extra=1, can_delete=False, can_order=False,
                          max_num=None, fields=None, exclude=None):
     """
